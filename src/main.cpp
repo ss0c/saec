@@ -4,6 +4,7 @@
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 #include <time.h>
+#include <ACS712.h>
 
 byte hours;
 byte minutes;
@@ -17,12 +18,14 @@ const long gmtOffset_sec = -14400;
 const int dayLightOffset_sec = 3600;
 
 bool rdySend = false;
+bool rdySend2 = false;
 bool ledState2 = 0;
 volatile bool ledState = 0;
 //
 volatile const int ledPin = 2;
 const int ledPin2 = 4;
 const int s1Pin = 13;
+const int s2Pin = 12;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -34,12 +37,16 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
-    if (strcmp((char*)data, "toggle") == 0) {
-      ledState = !ledState;
+    if (strcmp((char*)data, "toggle_on") == 0) {
+      ledState = 1;
       Serial.print(WS_TEXT);
-      ws.textAll(String(ledState ? "4" : "5")); // Enviar estado del LED 1
+      ws.textAll("led1_on"); // Enviar estado del LED 1
     }
-    if (strcmp((char*)data, "toggle1") == 0) {
+    else if (strcmp((char*)data, "toggle_off") == 0) {
+      ledState = 0;
+      ws.textAll("led1_off"); // Enviar estado del LED 2
+    }
+    else if (strcmp((char*)data, "toggle1") == 0) {
       ledState2 = !ledState2;
       ws.textAll(String(ledState2 ? "2" : "3")); // Enviar estado del LED 2
     }
@@ -116,15 +123,24 @@ void mov_falling(){
   rdySend = true;
 }
 
+void mov_fallings2(){
+  ledState2 = 0;
+  digitalWrite(ledPin2, ledState2);
+  rdySend2 = true;
+}
+
+ACS712 sensor(ACS712_30A, 36);
 
 void loop1(void *parameter){
   attachInterrupt(digitalPinToInterrupt(s1Pin), mov_falling ,FALLING);
+  attachInterrupt(digitalPinToInterrupt(s2Pin), mov_fallings2 ,FALLING);
+  sensor.calibrate();
+  
   for(;;){
-    
+
     vTaskDelay(10);
   }
 }
-
 
 void setup(){
   Serial.begin(115200);
@@ -134,12 +150,16 @@ void setup(){
   pinMode(ledPin2, OUTPUT);
   digitalWrite(ledPin2, LOW);
   pinMode(s1Pin, INPUT);
+  pinMode(s2Pin, INPUT);
+  pinMode(36, INPUT);
+
+  
 
 
   xTaskCreatePinnedToCore(
     loop1,    //Funcion que ejecuta la Tarea
     "Sensor", //Nombre de la Tarea
-    1000,     //Numero de pilas de la tarea
+    2000,     //Numero de pilas de la tarea
     NULL,     //Parametro que se la pasan a la Tarea
     1,        //Prioridad de la tarea
     &Task1,   
@@ -185,8 +205,14 @@ void loop() {
 
   compareTime(20,20,20,27);
 
+
   if(rdySend == true){
-    ws.textAll(String(ledState ? "4" : "5"));
+    ws.textAll("led1_off");
     rdySend = false;
+  }
+
+  else if(rdySend2 == true){
+    ws.textAll(String(ledState2 ? "2" : "3"));
+    rdySend2 = false;
   }
 }
