@@ -5,11 +5,19 @@
 #include <SPIFFS.h>
 #include <time.h>
 #include <ACS712.h>
+#include <ArduinoJson.h>
+#include <UniversalTelegramBot.h>
+#include <WiFiClientSecure.h>
+
+int horas_inicio;
+int horas_final;
+int minutos_inicio;
+int minutos_final;
 
 byte hours;
 byte minutes;
-byte minutes_ant;
 
+float sensibilidad = 0.066;
 // Replace with your network credentials
 const char* ssid = "Fibertel WiFi327 2.4GHz";
 const char* password = "01430017239";
@@ -17,19 +25,36 @@ const char* ntpServer  = "pool.ntp.org";
 const long gmtOffset_sec = -14400;
 const int dayLightOffset_sec = 3600;
 
+
 bool rdySend = false;
 bool rdySend2 = false;
 bool ledState2 = 0;
+bool ledState3 = 0;
+bool toma1State = 0;
+bool toma2State = 0;
+bool toma3State = 0;
+bool bannState = 0;
+bool fuera = false;
 volatile bool ledState = 0;
 //
 volatile const int ledPin = 2;
 const int ledPin2 = 4;
+const int ledPin3 = 16;
+const int ledPin4 = 17;
 const int s1Pin = 13;
 const int s2Pin = 12;
+const int s3Pin = 14;
+const int s4Pin = 27;
+
+const int toma1Pin = 14;
+const int toma2Pin = 27; 
+const int toma3Pin = 26;
+const int bannPin = 25;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
+
 
 TaskHandle_t Task1;
 
@@ -46,9 +71,35 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       ledState = 0;
       ws.textAll("led1_off"); // Enviar estado del LED 2
     }
-    else if (strcmp((char*)data, "toggle1") == 0) {
-      ledState2 = !ledState2;
-      ws.textAll(String(ledState2 ? "2" : "3")); // Enviar estado del LED 2
+
+    else if (strcmp((char*)data, "toggle1_on") == 0) {
+      ledState2 = true;
+      ws.textAll("2"); // Enviar estado del LED 2
+    }
+
+    else if (strcmp((char*)data, "toggle1_off") == 0) {
+      ledState2 = false;
+      ws.textAll("3"); // Enviar estado del LED 2
+    }
+
+    else if (strcmp((char*)data, "toggle3_on") == 0) {
+      ledState3 = 1;
+      Serial.print(WS_TEXT);
+      ws.textAll("led3_on"); // Enviar estado del LED 1
+    }
+    else if (strcmp((char*)data, "toggle3_off") == 0) {
+      ledState3 = 0;
+      ws.textAll("led3_off"); // Enviar estado del LED 2
+    }
+    else if(data[0] == 'i'){
+      horas_inicio = ((data[1] - 48)*10) + data[2] - 48;
+      minutos_inicio = ((data[4] - 48)*10) + data[5] - 48;
+      Serial.println(horas_inicio);
+      Serial.println(minutos_inicio);
+    }
+    else if(data[0] == 'f'){
+      horas_final = ((data[1] - 48)*10) + data[2] - 48;
+      minutos_final = ((data[4] - 48)*10) + data[5] - 48;
     }
   }
 }
@@ -81,19 +132,25 @@ void compareTime(byte hour_start, byte minute_start, byte hour_end, byte minute_
   hours = timeinfo.tm_hour;
   minutes = timeinfo.tm_min;
 
-
-
-  if(minutes != minutes_ant){ 
-    ws.textAll("h"+String(hours) + ":" + String(minutes));
-    minutes_ant = minutes;
-  }
-
-  
-
-  if((hours >= hour_start and minutes >= minute_start) and (hours <= hour_end and minutes <= minute_end)){
+  if((hours == hour_start and minutes == minute_start) and fuera != true){
     ledState = 0;
     digitalWrite(ledPin, LOW);
-    ws.textAll(String(ledState ? "4" : "5"));
+    ws.textAll("led1_off");
+
+    ledState2 = 0;
+    digitalWrite(ledPin2, LOW);
+    ws.textAll("led2_off");
+    fuera = true;
+  }
+  else if((hours == hour_end and minutes == minute_end) and fuera != false){
+    ledState = 1;
+    digitalWrite(ledPin, HIGH);
+    ws.textAll("led1_on");
+
+    ledState2 = 1;
+    digitalWrite(ledPin2, HIGH);
+    ws.textAll("led2_on");
+    fuera = false;
   }
 }
 
@@ -129,12 +186,9 @@ void mov_fallings2(){
   rdySend2 = true;
 }
 
-ACS712 sensor(ACS712_30A, 36);
-
 void loop1(void *parameter){
   attachInterrupt(digitalPinToInterrupt(s1Pin), mov_falling ,FALLING);
   attachInterrupt(digitalPinToInterrupt(s2Pin), mov_fallings2 ,FALLING);
-  sensor.calibrate();
   
   for(;;){
 
@@ -149,17 +203,17 @@ void setup(){
   digitalWrite(ledPin, LOW);
   pinMode(ledPin2, OUTPUT);
   digitalWrite(ledPin2, LOW);
+  pinMode(ledPin3, OUTPUT);
+  digitalWrite(ledPin3, LOW);
   pinMode(s1Pin, INPUT);
   pinMode(s2Pin, INPUT);
-  pinMode(36, INPUT);
-
-  
+  pinMode(39, INPUT);
 
 
   xTaskCreatePinnedToCore(
     loop1,    //Funcion que ejecuta la Tarea
     "Sensor", //Nombre de la Tarea
-    2000,     //Numero de pilas de la tarea
+    1000,     //Numero de pilas de la tarea
     NULL,     //Parametro que se la pasan a la Tarea
     1,        //Prioridad de la tarea
     &Task1,   
@@ -198,14 +252,22 @@ void setup(){
 
 
 
+
+
+
 void loop() {
+
   ws.cleanupClients();
   digitalWrite(ledPin, ledState);
   digitalWrite(ledPin2, ledState2);
+  digitalWrite(ledPin3, ledState3);
 
-  compareTime(20,20,20,27);
+  digitalWrite(toma1Pin, toma1State);
+  digitalWrite(toma2Pin, toma2State);
+  digitalWrite(toma3Pin, toma3State);
 
-
+  compareTime(horas_inicio,minutos_inicio,horas_final,minutos_final);
+  
   if(rdySend == true){
     ws.textAll("led1_off");
     rdySend = false;
@@ -215,4 +277,6 @@ void loop() {
     ws.textAll(String(ledState2 ? "2" : "3"));
     rdySend2 = false;
   }
+
+
 }

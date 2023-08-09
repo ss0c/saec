@@ -117,14 +117,23 @@
       <div class="content">
          <div class="card" id="switches">
             <h2>COCINA</h2>
-            
             <label class="switch""> <input type="checkbox" id="led1"> <span class="slider round"></span><span id="current"></span> </label> </br> 
-            <h2>LIVING</h2>
+            <h2>PIEZA</h2>
             <label class="switch""> <input type="checkbox" id="led2"> <span class="slider round"></span> </label> 
-         </div>
+            <h2>BAÑO</h2>
+            <label class="switch""> <input type="checkbox" id="led3"> <span class="slider round"></span> </label> 
+            <h2>TOMA1</h2>
+            <label class="switch""> <input type="checkbox" id="toma1"> <span class="slider round"></span> </label> 
+            <h2>TOMA2</h2>
+            <label class="switch""> <input type="checkbox" id="toma2"> <span class="slider round"></span> </label> 
+            <h2>TOMA3</h2>
+            <label class="switch""> <input type="checkbox" id="toma3"> <span class="slider round"></span> </label> 
       </div>
       <div class="timer">
-        <h2 class="time" id="time"></h2>
+        <input type="time" id="iTime">
+        <button onclick="getTime()">I</button>
+        <input type="time" id="FTime">
+        <button onclick="getFTime()">F</button>
       </div>
       <script src="websocket.js"></script>
    </body>

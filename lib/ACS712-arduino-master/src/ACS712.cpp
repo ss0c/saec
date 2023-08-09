@@ -19,10 +19,10 @@ ACS712::ACS712(ACS712_type type, uint8_t _pin) {
 
 int ACS712::calibrate() {
 	uint16_t acc = 0;
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < 1000; i++) {
 		acc += analogRead(pin);
 	}
-	zero = acc / 10;
+	zero = acc / 1000;
 	return zero;
 }
 
